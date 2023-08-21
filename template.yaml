@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  dynamo-gpx
+
+  Sample SAM Template for dynamo-gpx
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 128
+
+Resources:
+  DynamoGpxFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - arm64
+      Role: !GetAtt DynamoGpxRole.Arn
+
+  # S3バケット
+  DynamoGpxBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: dynamo-gpx
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+
+  # DynamoDBテーブル
+  DynamoGpxTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: dynamo-gpx
+      AttributeDefinitions:
+        - AttributeName: device_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: device_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  # DynamoGpxBucketとDynamoGpxTableへのアクセス権限を持つIAMロール
+  DynamoGpxRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: dynamo-gpx-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: dynamo-gpx-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:aws:s3:::${DynamoGpxBucket}
+                  - !Sub arn:aws:s3:::${DynamoGpxBucket}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoGpxTable}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoGpxTable}/*
